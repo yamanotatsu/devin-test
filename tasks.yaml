@@ -1,0 +1,323 @@
+# TaskZen MVP 開発計画
+# このドキュメントは、Next.jsとSupabaseを使ったシンプルTodoアプリ「TaskZen」のMVP（Minimum Viable Product）を開発するための、
+# 詳細なステップバイステップタスクリストです。各タスクは小さく、テスト可能で、明確な開始と終了を持ち、一つの関心事に集中するように設計されています。
+
+phases:
+  - name: "フェーズ 1: 環境構築とSupabaseセットアップ"
+    sections:
+      - title: "1.1. プロジェクトの初期設定"
+        tasks:
+          - id: "1.1.1"
+            name: "Next.jsプロジェクトの作成"
+            purpose: "新しいNext.jsプロジェクトを初期化する。"
+            steps:
+              - "npx create-next-app@latest taskzen --typescript --tailwind --eslint --app を実行する。"
+            verification: "プロジェクトフォルダが作成され、next devで起動できることを確認。"
+            completed: false
+          - id: "1.1.2"
+            name: "必要なライブラリのインストール"
+            purpose: "Supabaseクライアントライブラリをプロジェクトに導入する。"
+            steps:
+              - "プロジェクトルートで npm install @supabase/supabase-js を実行する。"
+            verification: "package.json に @supabase/supabase-js が追加されていることを確認。"
+            completed: false
+          - id: "1.1.3"
+            name: "環境変数の設定"
+            purpose: "Supabaseの接続情報を安全に管理するための環境変数を設定する。"
+            steps:
+              - "プロジェクトルートに .env.local ファイルを作成し、NEXT_PUBLIC_SUPABASE_URL と NEXT_PUBLIC_SUPABASE_ANON_KEY をSupabaseプロジェクトの値で設定する。"
+            verification: ".env.local が存在し、必要な変数が記述されていることを確認。"
+            completed: false
+          - id: "1.1.4"
+            name: "グローバルCSSのセットアップ"
+            purpose: "Tailwind CSSが正常に適用されるようにグローバルCSSを設定する。"
+            steps:
+              - "src/app/globals.css にTailwindのディレクティブ @tailwind base; @tailwind components; @tailwind utilities; を追加する。"
+            verification: "アプリケーションが起動し、Tailwind CSSクラスが適用できることを確認。"
+            completed: false
+          - id: "1.1.5"
+            name: "ルートレイアウトの基本設定"
+            purpose: "全てのページに共通するHTML構造（<html>, <body>）を設定する。"
+            steps:
+              - "src/app/layout.tsx に基本的なHTML構造を定義する。"
+            verification: "アプリケーションにアクセスした際に、ルートレイアウトが適用されていることを確認。"
+            completed: false
+      - title: "1.2. Supabaseプロジェクトの準備"
+        tasks:
+          - id: "1.2.1"
+            name: "Supabaseプロジェクトの作成"
+            purpose: "新しいSupabaseプロジェクトをクラウド上に作成する。"
+            steps:
+              - "Supabaseのウェブサイトにアクセスし、新規プロジェクトを作成する。"
+            verification: "Supabaseダッシュボードにプロジェクトが表示され、APIキーが取得できることを確認。"
+            completed: false
+          - id: "1.2.2"
+            name: "todos テーブルの作成"
+            purpose: "Todoアイテムを保存するためのデータベーステーブルを作成する。"
+            steps:
+              - |
+                SupabaseダッシュボードのSQL EditorまたはTable Editorから、以下のスキーマで public.todos テーブルを作成する。
+                ```sql
+                CREATE TABLE todos (
+                  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                  user_id UUID REFERENCES auth.users(id) NOT NULL,
+                  title TEXT NOT NULL,
+                  is_completed BOOLEAN DEFAULT FALSE NOT NULL,
+                  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+                );
+                ```
+            verification: "Supabaseダッシュボードのテーブルエディタで todos テーブルが存在し、定義したカラムがあることを確認。"
+            completed: false
+          - id: "1.2.3"
+            name: "Row Level Security (RLS) の有効化"
+            purpose: "todos テーブルに対するアクセス制御を有効にする。"
+            steps:
+              - "SupabaseダッシュボードのAuthentication -> Policies -> TodosテーブルからRLSを有効にする。"
+            verification: "todos テーブルのRLSがオンになっていることを確認。"
+            completed: false
+          - id: "1.2.4"
+            name: "RLS SELECT ポリシーの作成"
+            purpose: "認証済みユーザーが自分のTodoのみを読み取れるようにする。"
+            steps:
+              - |
+                todos テーブルに新しいポリシーを追加:
+                - Name: Allow authenticated users to read their own todos
+                - For: SELECT
+                - Using expression: auth.uid() = user_id
+                - Target roles: authenticated
+            verification: "ポリシーが正常に保存されていることを確認。"
+            completed: false
+          - id: "1.2.5"
+            name: "RLS INSERT ポリシーの作成"
+            purpose: "認証済みユーザーが自分のTodoのみを作成できるようにする。"
+            steps:
+              - |
+                todos テーブルに新しいポリシーを追加:
+                - Name: Allow authenticated users to create their own todos
+                - For: INSERT
+                - With check expression: auth.uid() = user_id
+                - Target roles: authenticated
+            verification: "ポリシーが正常に保存されていることを確認。"
+            completed: false
+          - id: "1.2.6"
+            name: "RLS UPDATE ポリシーの作成"
+            purpose: "認証済みユーザーが自分のTodoのみを更新できるようにする。"
+            steps:
+              - |
+                todos テーブルに新しいポリシーを追加:
+                - Name: Allow authenticated users to update their own todos
+                - For: UPDATE
+                - Using expression: auth.uid() = user_id
+                - Target roles: authenticated
+            verification: "ポリシーが正常に保存されていることを確認。"
+            completed: false
+          - id: "1.2.7"
+            name: "RLS DELETE ポリシーの作成"
+            purpose: "認証済みユーザーが自分のTodoのみを削除できるようにする。"
+            steps:
+              - |
+                todos テーブルに新しいポリシーを追加:
+                - Name: Allow authenticated users to delete their own todos
+                - For: DELETE
+                - Using expression: auth.uid() = user_id
+                - Target roles: authenticated
+            verification: "ポリシーが正常に保存されていることを確認。"
+            completed: false
+
+  - name: "フェーズ 2: Supabaseクライアントと認証機能"
+    sections:
+      - title: "2.1. Supabaseクライアントの初期化"
+        tasks:
+          - id: "2.1.1"
+            name: "クライアントサイドSupabaseクライアントの作成"
+            purpose: "ブラウザでSupabase操作を行うためのクライアントを初期化する。"
+            steps:
+              - "src/lib/supabase/client.ts を作成し、createBrowserClient を使用してSupabaseクライアントをエクスポートする。"
+            verification: "他のコンポーネントから getBrowserClient() がインポートできることを確認。"
+            completed: false
+          - id: "2.1.2"
+            name: "サーバーサイドSupabaseクライアントの作成"
+            purpose: "Server ComponentsやServer ActionsでSupabase操作を行うためのクライアントを初期化する。"
+            steps:
+              - "src/lib/supabase/server.ts を作成し、createServerClient を使用してSupabaseクライアントをエクスポートする。"
+            verification: "他のコンポーネントやServer Actionsから createServerClient() がインポートできることを確認。"
+            completed: false
+          - id: "2.1.3"
+            name: "認証関連の型定義の追加"
+            purpose: "Supabaseの型定義をプロジェクトで使用できるようにする。"
+            steps:
+              - "src/lib/types/index.d.ts ファイルを作成し、Database 型をインポートしてエクスポートする。(supabase gen types typescript --project-id \"your-project-id\" --schema public > src/lib/types/supabase.ts で自動生成し、これをインポートする方法が良い。)"
+            verification: "Supabaseからのレスポンスデータに型ヒントが適用されることを確認。"
+            completed: false
+      - title: "2.2. ユーザー認証機能の実装"
+        tasks:
+          - id: "2.2.1"
+            name: "認証ページのレイアウト作成"
+            purpose: "ログイン/サインアップページに共通のレイアウトを適用する。"
+            steps:
+              - "src/app/(auth)/layout.tsx を作成し、認証フォームを囲むシンプルなレイアウトを定義する。"
+            verification: "(auth) グループ内のページでレイアウトが適用されることを確認。"
+            completed: false
+          - id: "2.2.2"
+            name: "認証フォームコンポーネントの作成 (Client Component)"
+            purpose: "ログインとサインアップのUIを提供する再利用可能なフォームコンポーネントを作成する。"
+            steps:
+              - "src/components/features/auth/AuthForm.tsx を作成し、メールアドレスとパスワードの入力フィールド、フォーム送信ボタンを配置する。\"use client\" ディレクティブを追加する。"
+            verification: "コンポーネントがエラーなくレンダリングされることを確認。"
+            completed: false
+          - id: "2.2.3"
+            name: "サインアップページの作成"
+            purpose: "ユーザーが新規登録できるページを実装する。"
+            steps:
+              - "src/app/(auth)/signup/page.tsx を作成し、AuthForm コンポーネントをインポート・使用する。Supabase signUp メソッドを呼び出すロジックを AuthForm 内に実装する。"
+            verification: "フォームを送信するとSupabaseに新規ユーザーが登録され、ユーザー管理画面で確認できることを確認。"
+            completed: false
+          - id: "2.2.4"
+            name: "ログインページの作成"
+            purpose: "ユーザーが既存のアカウントでログインできるページを実装する。"
+            steps:
+              - "src/app/(auth)/login/page.tsx を作成し、AuthForm コンポーネントをインポート・使用する。Supabase signInWithPassword メソッドを呼び出すロジックを AuthForm 内に実装する。"
+            verification: "登録済みのメールとパスワードでログインできることを確認。ログイン成功後に /dashboard へリダイレクトされることを確認。"
+            completed: false
+          - id: "2.2.5"
+            name: "ログアウト機能の追加"
+            purpose: "ユーザーが安全にセッションを終了できる機能を提供する。"
+            steps:
+              - "src/components/features/Header.tsx (または任意の場所) にログアウトボタンを作成し、Supabase signOut メソッドを呼び出す。ログアウト成功後に /login へリダイレクトする。"
+            verification: "ログアウトボタンをクリックするとセッションが終了し、ログインページへ戻ることを確認。"
+            completed: false
+          - id: "2.2.6"
+            name: "ミドルウェアによる認証ガードの実装"
+            purpose: "未認証ユーザーが /dashboard などの保護されたルートにアクセスできないようにする。"
+            steps:
+              - "src/middleware.ts を作成し、createServerClient と supabase.auth.getSession() を使用してセッションをチェックする。セッションがない場合は /login にリダイレクトするロジックを実装する。"
+            verification: "ログアウト状態で /dashboard にアクセスすると、自動的に /login にリダイレクトされることを確認。"
+            completed: false
+          - id: "2.2.7"
+            name: "Supabaseセッションの更新ロジックの追加 (ミドルウェア)"
+            purpose: "Supabaseセッションを適切に管理し、クライアントとサーバーで同期させる。"
+            steps:
+              - "src/middleware.ts 内で、Supabase updateSession を呼び出し、セッション情報をレスポンスクッキーに書き込むロジックを追加する。"
+            verification: "ブラウザのクッキーにSupabaseのセッション情報が適切に更新されていることを確認。"
+            completed: false
+
+  - name: "フェーズ 3: Todo管理機能 (CRUD)"
+    sections:
+      - title: "3.1. Todoの表示 (Read)"
+        tasks:
+          - id: "3.1.1"
+            name: "ダッシュボードページの作成 (Server Component)"
+            purpose: "認証済みユーザーのTodoリストを表示するメインページを作成する。"
+            steps:
+              - "src/app/dashboard/page.tsx を作成する。ここでサーバーサイドのSupabaseクライアント (createServerClient) を使用して、ログインユーザーのTodoデータを取得する。"
+            verification: "ログイン後 /dashboard にアクセスすると、空のリストまたは既存のTodoデータが表示されることを確認。"
+            completed: false
+          - id: "3.1.2"
+            name: "Todoリストコンポーネントの作成 (Client Component)"
+            purpose: "取得したTodoデータを表示するUIコンポーネントを作成する。"
+            steps:
+              - "src/components/features/todo/TodoList.tsx を作成し、props としてTodoアイテムの配列を受け取り、リスト形式で表示する。\"use client\" ディレクティブを追加する。"
+            verification: "dashboard/page.tsx で TodoList にダミーデータを渡すと、リストがレンダリングされることを確認。"
+            completed: false
+          - id: "3.1.3"
+            name: "個々のTodoアイテムコンポーネントの作成 (Client Component)"
+            purpose: "各Todoアイテムの表示、完了状態、編集、削除UIをカプセル化する。"
+            steps:
+              - "src/components/features/todo/TodoItem.tsx を作成し、todo オブジェクトを props として受け取る。チェックボックスとタイトル、削除ボタンを配置する。\"use client\" ディレクティブを追加する。"
+            verification: "TodoList 内で TodoItem が適切にレンダリングされることを確認。"
+            completed: false
+      - title: "3.2. Todoの作成 (Create)"
+        tasks:
+          - id: "3.2.1"
+            name: "Todo入力フォームコンポーネントの作成 (Client Component)"
+            purpose: "新しいTodoタスクを入力するためのフォームUIを作成する。"
+            steps:
+              - "src/components/features/todo/TodoInput.tsx を作成し、テキスト入力フィールドと「追加」ボタンを配置する。\"use client\" ディレクティブを追加する。"
+            verification: "dashboard/page.tsx で TodoInput が表示されることを確認。"
+            completed: false
+          - id: "3.2.2"
+            name: "Server ActionによるTodo作成ロジックの実装"
+            purpose: "クライアントからのTodo作成リクエストをサーバーサイドで安全に処理する。"
+            steps:
+              - "src/app/dashboard/actions.ts を作成し、\"use server\" ディレクティブを追加する。addTodo という非同期関数をエクスポートし、createServerClient を使用してSupabaseにTodoを挿入するロジックを記述する。ユーザーIDは認証済みセッションから取得する。"
+            verification: "TodoInput から addTodo を呼び出し、Supabaseデータベースに新しいTodoが追加されることを確認。"
+            completed: false
+      - title: "3.3. Todoの更新 (Update)"
+        tasks:
+          - id: "3.3.1"
+            name: "完了状態切り替えロジックの実装 (Server Action)"
+            purpose: "Todoアイテムの完了状態を切り替えるServer Actionを実装する。"
+            steps:
+              - "src/app/dashboard/actions.ts に toggleTodoCompletion という非同期関数を追加し、id と is_completed を受け取り、Supabaseのtodosテーブルを更新する。"
+            verification: "TodoItem のチェックボックスを操作すると、データベースの is_completed フィールドが更新されることを確認。"
+            completed: false
+          - id: "3.3.2"
+            name: "Todoタイトルの編集ロジックの実装 (Server Action)"
+            purpose: "Todoアイテムのタイトルをインラインで編集できるようにするServer Actionを実装する。"
+            steps:
+              - "src/app/dashboard/actions.ts に updateTodoTitle という非同期関数を追加し、id と newTitle を受け取り、Supabaseのtodosテーブルを更新する。"
+            verification: "TodoItem のタイトルをクリックして編集し、エンターキーを押すとデータベースの title フィールドが更新されることを確認。"
+            completed: false
+      - title: "3.4. Todoの削除 (Delete)"
+        tasks:
+          - id: "3.4.1"
+            name: "Todo削除ロジックの実装 (Server Action)"
+            purpose: "Todoアイテムをデータベースから削除するServer Actionを実装する。"
+            steps:
+              - "src/app/dashboard/actions.ts に deleteTodo という非同期関数を追加し、id を受け取り、Supabaseのtodosテーブルからレコードを削除する。"
+            verification: "TodoItem の削除ボタンをクリックすると、データベースからTodoが削除されることを確認。"
+            completed: false
+
+  - name: "フェーズ 4: リアルタイム更新とUX向上"
+    sections:
+      - title: "4.1. リアルタイム更新の実装"
+        tasks:
+          - id: "4.1.1"
+            name: "TodoList でのリアルタイム購読開始"
+            purpose: "Supabase Realtimeを使って、todos テーブルの変更をリアルタイムで受け取る。"
+            steps:
+              - "src/components/features/todo/TodoList.tsx に useEffect フックを追加し、Supabaseクライアント (getBrowserClient) を使って public:todos テーブルの全ての変更（INSERT, UPDATE, DELETE）を購読する。"
+            verification: "開発者ツールでネットワークタブを確認し、WebSocket接続が確立されていることを確認。"
+            completed: false
+          - id: "4.1.2"
+            name: "リアルタイムイベント発生時のTodoリスト更新"
+            purpose: "リアルタイムイベントを受信した際に、Todoリストの表示を即座に更新する。"
+            steps:
+              - "TodoList.tsx の購読ハンドラ内で、受信したイベント（新しいTodo、更新されたTodo、削除されたTodo）に基づいて、コンポーネントのローカル状態（useState）を更新するロジックを実装する。"
+            verification: "別ブラウザタブでTodoを追加/更新/削除すると、現在のタブのTodoリストが自動で更新されることを確認。"
+            completed: false
+      - title: "4.2. 最小限のUX改善"
+        tasks:
+          - id: "4.2.1"
+            name: "フォーム送信中のローディング表示"
+            purpose: "ユーザーがフォームを送信した際に、処理中であることを視覚的に示す。"
+            steps:
+              - "フォームの送信ボタンに disabled 属性とローディングスピナーを追加し、Server Actionの処理中はローディング状態に切り替える。Reactの useFormStatus フックを利用する。"
+            verification: "Todoを追加する際、ボタンが一時的に無効化され、ローディング表示が出現することを確認。"
+            completed: false
+          - id: "4.2.2"
+            name: "エラーメッセージの表示"
+            purpose: "認証やTodo操作でエラーが発生した場合に、ユーザーにフィードバックを提供する。"
+            steps:
+              - "フォーム送信後のエラーレスポンスをキャッチし、ユーザーフレンドリーなエラーメッセージをフォームまたはページ上部に表示する。"
+            verification: "不正な認証情報やデータベースエラーを意図的に発生させ、エラーメッセージが表示されることを確認。"
+            completed: false
+          - id: "4.2.3"
+            name: "完了したTodoの視覚的な区別"
+            purpose: "完了状態のTodoがリスト内で明確に区別できるようにする。"
+            steps:
+              - "TodoItem.tsx で is_completed の状態に応じて、打ち消し線 (line-through) やテキスト色の変更など、Tailwind CSSでスタイルを適用する。"
+            verification: "チェックボックスを切り替えると、Todoアイテムの見た目が変化することを確認。"
+            completed: false
+
+  - name: "フェーズ 5: デプロイ準備 (任意)"
+    sections:
+      - title: "5.1.1: Vercelへのデプロイ設定"
+        tasks:
+          - id: "5.1.1"
+            name: "Vercelへのデプロイ設定"
+            purpose: "アプリケーションをVercelにデプロイし、公開する。"
+            steps:
+              - "GitHubリポジトリを作成し、コードをプッシュする。Vercelアカウントにログインし、新しいプロジェクトとしてGitHubリポジトリをインポートする。環境変数をVercelのプロジェクト設定に追加する。"
+            verification: "Vercelがビルドとデプロイを成功させ、公開URLでアプリケーションにアクセスできることを確認。"
+            completed: false
