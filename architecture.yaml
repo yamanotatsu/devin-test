@@ -1,0 +1,192 @@
+# TaskZen システムアーキテクチャ
+# このドキュメントは、Next.jsとSupabaseで構築されるシンプルTodoアプリ「TaskZen」のシステムアーキテクチャについて詳細に説明します。
+
+architecture:
+  overview:
+    title: "1. 全体像"
+    description: "TaskZenは、Next.jsをフロントエンド、Supabaseをバックエンドの主軸としたサーバーレスアーキテクチャを採用しています。"
+    mermaid_diagram: |
+      graph LR
+          User -- HTTPS --> Next.js Application
+          Next.js Application -- Supabase Client SDK --> Supabase (Database, Auth, Realtime)
+          Supabase -- Webhooks/Realtime --> Next.js Application (Optional: Server-side revalidation)
+
+          subgraph Frontend (Next.js)
+              A[Client Components]
+              B[Server Components]
+              C[Next.js API Routes (Optional)]
+          end
+
+          subgraph Backend (Supabase)
+              D[Supabase Auth (PostgreSQL)]
+              E[Supabase Database (PostgreSQL)]
+              F[Supabase Realtime]
+              G[Row Level Security (RLS)]
+          end
+
+          User -- Browsing, Interaction --> A
+          A -- Data Fetching, Mutations --> B
+          B -- Direct Client Connection --> D
+          B -- Direct Client Connection --> E
+          B -- Direct Client Connection --> F
+          E -- Enforced by --> G
+    tech_stack:
+      - name: "フロントエンド"
+        technologies:
+          - "Next.js (App Router, Server Components & Client Components)"
+          - "Tailwind CSS"
+      - name: "バックエンド (BaaS)"
+        technologies:
+          - "Supabase (PostgreSQL Database, Auth, Realtime)"
+
+  component_roles:
+    title: "2. 各コンポーネントの役割"
+    frontend:
+      title: "2.1. フロントエンド (Next.js)"
+      description: "Next.jsのApp Routerモデルを活用し、Server ComponentsとClient Componentsを適切に使い分けます。"
+      server_components:
+        name: "Next.js Server Components"
+        role: "ページの初期ロード時に、認証済みユーザーのTodoリストをサーバーサイドでプリフェッチし、静的なHTMLとしてレンダリングします。これにより、初回ロード時のパフォーマンスが向上し、SEOにも有利です。SupabaseのAPIキーやシークレット情報を安全に扱います。"
+        example: "/dashboard/page.tsx で、ログインユーザーのTodoデータをSupabaseから取得し、Client Componentである TodoList に渡す。"
+        features:
+          - "データベースへの直接アクセス（Supabase SDK経由）"
+          - "Server Actionsの定義"
+      client_components:
+        name: "Next.js Client Components"
+        role: "ユーザーインタラクション（Todoの追加、完了状態の切り替え、タイトルの編集、削除、認証フォームの入力など）をハンドリングします。SupabaseのRealtime機能を購読し、リアルタイムでのUI更新を担当します。"
+        example: "src/components/features/todo/TodoList.tsx, TodoItem.tsx, AuthForm.tsx。"
+        features:
+          - "イベントハンドリング"
+          - "状態管理（useState, useEffect）"
+          - "ブラウザ上でのSupabase SDKの実行"
+      api_routes:
+        name: "Next.js API Routes (Optional)"
+        role: |
+          今回のシンプルなTodoアプリでは、Supabaseクライアントを直接利用するため、必須ではありません。
+          ただし、以下のような場合に検討されます:
+          - Supabaseに直接公開したくない複雑なビジネスロジックが存在する場合。
+          - 複数の外部APIを組み合わせたサーバーサイド処理が必要な場合。
+          - セキュリティ上の理由から、クライアントから直接データベース操作を行いたくない場合。
+        example: "/api/image-upload など、ファイルストレージとの連携や画像処理など。"
+    backend:
+      title: "2.2. バックエンド (Supabase)"
+      description: "Supabaseは、認証、データベース、リアルタイム通信の機能を提供するBaaS（Backend as a Service）です。"
+      auth:
+        name: "Supabase Auth"
+        role: "ユーザーのサインアップ、ログイン、ログアウトといった認証フローを管理します。メールアドレスとパスワードによる認証を提供し、JWT（JSON Web Token）を発行・管理します。"
+        database_table: "`auth.users` テーブルにユーザー情報が格納されます。"
+      database:
+        name: "Supabase Database (PostgreSQL)"
+        role: "Todoアイテムの永続化を担当するリレーショナルデータベースです。Todoのタイトル、完了状態、作成ユーザーIDなどを格納します。"
+        schema: "`public.todos` テーブルが中心となります。"
+        columns:
+          - name: "id"
+            description: "UUID, Primary Key"
+          - name: "user_id"
+            description: "Foreign Key (`auth.users.id`)"
+          - name: "title"
+            description: "TEXT"
+          - name: "is_completed"
+            description: "BOOLEAN"
+          - name: "created_at"
+            description: "TIMESTAMP WITH TIME ZONE"
+      realtime:
+        name: "Supabase Realtime"
+        role: "todos テーブルに対する変更（追加、更新、削除）をリアルタイムで検知し、WebSocketを通じて購読しているクライアントにプッシュ通知します。これにより、複数デバイス間でのTodoリストの即時同期を実現します。"
+      rls:
+        name: "Row Level Security (RLS)"
+        role: "データベースレベルで、各ユーザーが自分のTodoアイテムのみにアクセスできる（参照、作成、更新、削除）ように、厳格なアクセス制御を強制します。Supabase Authと連携し、認証済みユーザーのID (`auth.uid()`) を利用してデータアクセス権限を付与します。"
+        importance: "クライアントから直接データベースを操作するSupabaseのアーキテクチャにおいて、データの整合性とセキュリティを担保する最も重要な機能です。"
+
+  data_flow:
+    title: "3. データフロー"
+    description: "アプリケーション内での主要なデータフローは以下の通りです。"
+    flows:
+      - name: "ユーザー認証"
+        steps:
+          - "ユーザーがNext.jsの認証ページでメールとパスワードを入力。"
+          - "Next.js Client ComponentがSupabase Authクライアントを呼び出し、サインアップ/ログインリクエストをSupabaseに送信。"
+          - "Supabaseが認証を処理し、JWTを含むセッション情報をブラウザのクッキー（またはローカルストレージ）に保存。"
+          - "認証後、Next.jsはTodoリストページへリダイレクト。"
+      - name: "Todoリストの初期表示"
+        steps:
+          - "Todoリストページ（/dashboard）がロードされると、Next.js Server Componentが起動。"
+          - "Server Componentは、クッキーから認証情報を取得し、Supabaseサーバークライアントを初期化。"
+          - "RLSによって保護されたSupabase Databaseから、現在の認証済みユーザーのTodoデータを安全にフェッチ。"
+          - "フェッチされたデータはHTMLとしてレンダリングされ、ブラウザに送信され、高速な初回表示を実現。"
+      - name: "Todoの追加/更新/削除"
+        steps:
+          - "ユーザーがNext.js Client ComponentでTodoを追加/更新/削除する操作を行う。"
+          - "クライアント側のSupabase SDKが対応するAPIリクエスト（INSERT, UPDATE, DELETE）をSupabase Databaseに送信。"
+          - "RLSによって、そのユーザーが操作権限を持つTodoのみが変更されることが保証される。"
+      - name: "リアルタイム更新"
+        steps:
+          - "Todoの追加/更新/削除がSupabase Databaseで行われると、Supabase Realtimeサービスが変更を検知。"
+          - "Realtimeサービスは、そのテーブルを購読しているすべてのクライアント（Next.js Client Component）に変更イベントをプッシュ。"
+          - "Next.js Client Componentはイベントを受け取り、UIを即座に更新し、ユーザーは常に最新のTodoリストを閲覧できる。"
+
+  database_schema_and_rls:
+    title: "4. Supabase データベーススキーマとRLSポリシー"
+    users_table:
+      title: "4.1. `users` テーブル"
+      description: "Supabase Authによって自動的に作成・管理されます。"
+      columns:
+        - name: "id"
+          type: "UUID"
+          constraint: "Primary Key"
+          description: "ユーザーの一意なID"
+        - name: "email"
+          type: "TEXT"
+          description: "ユーザーのメールアドレス"
+        - name: "created_at"
+          type: "TIMESTAMP WITH TIME ZONE"
+          description: "ユーザー作成日時"
+        - description: "...その他、Authが生成するカラム。"
+    todos_table:
+      title: "4.2. `todos` テーブル"
+      description: "Todoアイテムの主要なテーブル。"
+      columns:
+        - name: "id"
+          type: "UUID"
+          constraint: "Primary Key, default gen_random_uuid()"
+          description: "Todoアイテムの一意な識別子"
+        - name: "user_id"
+          type: "UUID"
+          constraint: "Foreign Key (`auth.users.id`), NOT NULL"
+          description: "このTodoを作成したユーザーのID"
+        - name: "title"
+          type: "TEXT"
+          constraint: "NOT NULL"
+          description: "Todoのタスク内容"
+        - name: "is_completed"
+          type: "BOOLEAN"
+          constraint: "NOT NULL, default `FALSE`"
+          description: "Todoが完了したかどうかを示すフラグ"
+        - name: "created_at"
+          type: "TIMESTAMP WITH TIME ZONE"
+          constraint: "NOT NULL, default `NOW()`"
+          description: "Todoが作成された日時"
+    rls_policies:
+      title: "4.3. Row Level Security (RLS) ポリシー設定"
+      description: "todos テーブルには、以下のRLSポリシーが適用されます。これにより、認証されたユーザーは自身のTodoデータのみを操作できます。"
+      policies:
+        - name: "SELECT ポリシー (Allow users to read their own todos)"
+          for: "SELECT"
+          target_roles: "authenticated"
+          using_expression: "auth.uid() = user_id"
+          description: "認証済みのユーザーは、自身の `user_id` と `todos.user_id` が一致するレコードのみを参照できます。"
+        - name: "INSERT ポリシー (Allow users to create their own todos)"
+          for: "INSERT"
+          target_roles: "authenticated"
+          with_check_expression: "auth.uid() = user_id"
+          description: "認証済みのユーザーは、自身の `user_id` と一致する `user_id` を持つレコードのみを挿入できます。"
+        - name: "UPDATE ポリシー (Allow users to update their own todos)"
+          for: "UPDATE"
+          target_roles: "authenticated"
+          using_expression: "auth.uid() = user_id"
+          description: "認証済みのユーザーは、自身の `user_id` と `todos.user_id` が一致するレコードのみを更新できます。"
+        - name: "DELETE ポリシー (Allow users to delete their own todos)"
+          for: "DELETE"
+          target_roles: "authenticated"
+          using_expression: "auth.uid() = user_id"
+          description: "認証済みのユーザーは、自身の `user_id` と `todos.user_id` が一致するレコードのみを削除できます。"
